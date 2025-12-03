@@ -16,7 +16,7 @@ def read_input(filename):
     return ret
 
 def find_best_n(r, num):
-    print(r)
+    #print(r)
 
     res = 0
     used = 0
@@ -29,7 +29,7 @@ def find_best_n(r, num):
         res = (res * 10) + r[p]
         used = p+1
     
-    print(res)
+    #print(res)
     return res
 
 
