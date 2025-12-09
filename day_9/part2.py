@@ -21,7 +21,7 @@ def find_biggest(pos):
         if i[1] > height:
             height = i[1]
 
-    # assumes the final shape is convex, so we can have a single pair of left/right edges for each row
+    # assumes we can have a single pair of left/right edges for each row, each row as a single contiguous set of colour squares
     left = [None] * (height+1)
     right = [None] * (height+1)
 
@@ -53,11 +53,16 @@ def find_biggest(pos):
             if size > best:
                 min_x = min(pos[i][0], pos[j][0])
                 max_x = max(pos[i][0], pos[j][0])
+                min_y = min(pos[i][1], pos[j][1])
+                max_y = max(pos[i][1], pos[j][1])
                 fail = False
-                for k in range(min(pos[i][1], pos[j][1]), max(pos[i][1], pos[j][1])+1):
-                    if min_x < left[k] or right[k] < max_x:
+
+                while min_y < max_y:
+                    if min_x < left[min_y] or right[min_y] < max_x or min_x < left[max_y] or right[max_y] < max_x:
                         fail = True
                         break
+                    min_y += 1
+                    max_y -= 1
 
                 if fail is False:
                     best = size
