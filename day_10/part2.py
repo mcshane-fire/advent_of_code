@@ -2,6 +2,9 @@
 
 import sys, math
 
+# 16451 too low
+# 16515 too high
+
 def read_input(filename):
     ret = []
     fp = open(filename, 'r')
@@ -49,50 +52,6 @@ def make_n_from_s(n, s, max_values):
     fill_n_from_s(n, s, ret, sln, n, 0, max_values)
     return ret
 
-def make_up_one_power(p, power, cnt):
-    if p['count'] > 10000:
-        return None
-
-
-
-    if cnt == 0:
-        print("%d: %s %s" % (cnt, power, best))
-
-    if best is None:
-        #print("No best")
-        #print(power)
-        #print("-----------")
-        return cnt
-
-    #print(best)
-    slns = make_n_from_s(power[best[0]], len(p['rev'][best[0]]))
-    #print(slns)
-    lowest = None
-    for s in slns:
-        npower = power.copy()
-        fail = False
-        for i in range(len(s)):
-            for j in p['buttons'][p['rev'][best[0]][i]]:
-                npower[j] -= s[i]
-                if npower[j] < 0:
-                    # invalid combination
-                    fail = True
-                    break
-            if fail:
-                break
-        
-        if not fail:
-            p['count'] += 1
-            #if cnt == 0:
-                #print("%d->%d: Pressing combinations %s from rev %s" % (cnt, cnt+power[best[0]], s, p['rev'][best[0]]))
-                #print(npower)
-            nc = make_up_one_power(p, npower, cnt + power[best[0]])
-
-            if nc is not None and (lowest is None or nc < lowest):
-                lowest = nc
-
-    return lowest
-
 def bitcount(n):
     c = 0
     while n > 0:
@@ -100,8 +59,26 @@ def bitcount(n):
         c += 1
     return c
 
+def gen_values(t, pre, max_values, pos, neg, sum):
+    irange = [max(0, sum), max_values[pos]]
+    if irange[1] - sum > max_values[neg]:
+        irange[1] = max_values[neg] + sum
+    
+    for k in range(irange[0], irange[1]+1):
+        t.append(pre + [k, k - sum])
+
 def find_min(p):
     print("Finding min for problem:", p)
+
+    if len(p['buttons']) == 0:
+        print("No buttons left, no next move")
+        return None
+
+    for i in range(p['values']):
+        if len(p['rev'][i]) == 0 and p['power'][i] > 0:
+            print("No buttons left to generate power[%d] = %d" % (i, p['power'][i]))
+            return None
+
     max_values = []
     for i in range(len(p['buttons'])):
         max_val = None
@@ -111,67 +88,146 @@ def find_min(p):
 
         max_values.append(max_val)
 
-    best = None
-    for i in range(p['values']):
-        if p['power'][i] > 0:
-            combinations = count_n_from_s(p['power'][i], len(p['rev'][i]))
-            if best is None or combinations < best['num']:
-                best = {'target' : i, 'num' : combinations}   
+    print("max_values:", max_values)
 
     bfs = []
     min_count = None
     for i in range(len(p['rev'])):
         bf = 0
         for j in p['rev'][i]:
-            bf |= (1 << j)
+            if max_values[j] > 0:
+                bf |= (1 << j)
         bfs.append(bf)
 
     print("bitfields:", bfs)
 
+    backup = None
     for i in range(len(p['rev'])):
+        if bitcount(bfs[i]) == 1:
+            min_count = [1, i]
+            break
+        elif bitcount(bfs[i]) == 2:
+            if backup is None or p['power'][i] < p['power'][backup]:
+                backup = i
         for j in range(i):
-            nbf = bfs[i] ^ bfs[j]
-            c = bitcount(nbf)
-            if c > 0 and (min_count is None or c < min_count[0]):
-                min_count = [c, i, j]
+            if bfs[i] != 0 and bfs[j] != 0:
+                nbf = bfs[i] ^ bfs[j]
+                c = bitcount(nbf)
+                pe = abs(p['power'][i]-p['power'][j])
+                print("Candidate: %d (%d,%d)->%d pd = %d" % (c, i, j, nbf, pe))
+                if c > 0 and (min_count is None or c < min_count[0] or (c == min_count[0] and pe < min_count[1])):
+                    if bitcount(bfs[i]) > bitcount(bfs[j]):
+                        min_count = [c, pe, i, j]
+                    else:
+                        min_count = [c, pe, j, i]
 
     ret = {}
 
-    print("Best", best)
+    print("min_count", min_count)
+    if min_count is None:
+        print("No next move found")
+        return None
 
-    i = min_count[1]
-    j = min_count[2]
-    if min_count[0] == 2:
-        ipos = None
-        ineg = None
-        for k in range(p['values']):
-            if k in p['rev'][i] and k not in p['rev'][j]:
-                ipos = k
-            elif k in p['rev'][j] and k not in p['rev'][i]:
-                ineg = k
+    if len(min_count) == 4 and min_count[0] < 5:
+        i = min_count[2]
+        j = min_count[3]
+        ipos = []
+        ineg = []
+        for k in range(len(p['buttons'])):
+            if k in p['rev'][i] and k not in p['rev'][j] and max_values[k] > 0:
+                ipos.append(k)
+            elif k in p['rev'][j] and k not in p['rev'][i] and max_values[k] > 0:
+                ineg.append(k)
         sum = p['power'][i]-p['power'][j]
 
-        irange = [max(0, sum), max_values[ipos]]
-        if irange[1] - sum > max_values[ineg]:
-            irange[1] = max_values[ineg] + sum
-        
-        ret['buttons'] = [ipos, ineg]
+        print("ipos", ipos, "ineg", ineg, "sum", sum)
+
+        if min_count[0] == 1:
+            if len(ipos) == 0:
+                ipos.append(ineg[0])
+                sum = -sum
+            if sum < 0:
+                print("Odd button press count")
+                return None
+            else:
+                ret['buttons'] = [ipos[0]]
+                ret['values'] = [[sum]]
+        elif min_count[0] == 2:
+            if len(ipos) == 1 and len(ineg) == 1:
+                ret['buttons'] = [ipos[0], ineg[0]]
+                ret['values'] = []
+                gen_values(ret['values'], [], max_values, ipos[0], ineg[0], sum)
+            else:
+                irange = [sum - min(sum, max_values[ipos[1]]), min(sum, max_values[ipos[0]])]
+                ret['buttons'] = [ipos[0], ipos[1]]
+                ret['values'] = []
+                for k in range(irange[0], irange[1]+1):
+                    ret['values'].append([k, sum - k])
+        elif min_count[0] == 3:
+            if len(ipos) != 2 or len(ineg) != 1:
+                print("Error case:", ipos, ineg)
+                return None
+            ret['buttons'] = ipos + ineg
+            ret['values'] = []
+            for i in range(max_values[ipos[0]]+1):
+                gen_values(ret['values'], [i], max_values, ipos[1], ineg[0], sum-i)
+        else:
+            if len(ipos) != 2 or len(ineg) != 2:
+                print("Error case:", min_count)
+                return None
+            ret['buttons'] = ipos + ineg
+            ret['values'] = []
+
+            for k in range(max_values[ipos[0]]+1):
+                for m in range(max_values[ineg[0]]+1):
+                    gen_values(ret['values'], [k, m], max_values, ipos[1], ineg[1], sum - k + m)       
+    elif len(min_count) == 2 and min_count[0] == 1:
+        for j in range(len(p['buttons'])):
+            if (1<<j) == bfs[min_count[1]]:
+                ret['buttons'] = [j]
+                break
+        ret['values'] = [[p['power'][i]]]
+    elif backup is not None:
+        print("Backup")
+        print(p['rev'][backup], p['power'][backup])
+
+        ipos = p['rev'][backup].copy()
+        sum = p['power'][backup]
+        irange = [sum - min(sum, max_values[ipos[1]]), min(sum, max_values[ipos[0]])]
+
+        ret['buttons'] = ipos
         ret['values'] = []
         for k in range(irange[0], irange[1]+1):
-            ret['values'].append([k, k - sum])
-
-        print("Combo", min_count, len(ret['values']))
+            ret['values'].append([k, sum - k])
     else:
         print("Error case:", min_count)
         ret = None 
+               
+    return ret
 
-    if ret is None or best['num'] < len(ret['values']):
-        return best
+def replay_history(p, history):
+    test = [0] * p['values']
+    for b in history:
+        for ti in b[1]:
+            test[ti] += b[0]
+
+    return test
+
+
+def apply_trial(p, trial, presses, history):   
+    if len(trial['values']) < 50:
+        print(presses, trial)
     else:
-        return ret
+        print("%s Buttons:%s Values:%d count: %s ..." % (presses, trial['buttons'], len(trial['values']), trial['values'][0:25]))
 
-def apply_trial(p, trial):
-    print(trial)
+    print("History", history)
+    test = replay_history(p, history)
+    print("Replay:", test)
+    for i in range(len(test)):
+        test[i] += p['power'][i]
+    print("Sum:", test)
+
+
     np = {'values' : p['values'], 'buttons' : [], 'rev' : [], 'power' : p['power'].copy()}
     for i in range(np['values']):
         np['rev'].append([])
@@ -179,45 +235,85 @@ def apply_trial(p, trial):
         if i not in trial['buttons']:
             np['buttons'].append(p['buttons'][i])
             for j in p['buttons'][i]:
-                np['rev'][j].append(i)
-    for v in trial['values']:
-        for i in p['buttons'][trial['buttons'][0]]:
-            np['power'][i] -= v[0]
-        for i in p['buttons'][trial['buttons'][1]]:
-            np['power'][i] -= v[1]
-
-        print("Applied buttons") 
-        t = find_min(np)
-        print("Got next move:", t)
-        if t is not None and 'buttons' in t:
-            apply_trial(np, t)  
-        else:
-            print("Ending recursion")
-
-        for i in p['buttons'][trial['buttons'][0]]:
-            np['power'][i] += v[0]
-        for i in p['buttons'][trial['buttons'][1]]:
-            np['power'][i] += v[1]
+                np['rev'][j].append(len(np['buttons'])-1)
     
-         
+    best_solution = None
 
+    for v in trial['values']:
+        new_presses = 0
+        skip = False
+        for i in range(len(trial['buttons'])):
+            new_presses += v[i]
+            if v[i] > 0:
+                history.append([v[i], p['buttons'][trial['buttons'][i]].copy()])
+            for j in p['buttons'][trial['buttons'][i]]:
+                np['power'][j] -= v[i]
+                if np['power'][j] < 0:
+                    print("After pressing %s %d times, got negative power[%d] = %d" % (p['buttons'][trial['buttons'][i]], v[i], j, np['power'][j]))
+                    skip = True
+
+        if not skip:
+            print("Applied buttons %s with reps %s (new_presses %d)" % (trial['buttons'], v, new_presses)) 
+
+            if sorted(np['power'])[-1] == 0:
+                print("Zero max power, we're all done in %d" % (presses + new_presses))
+                print("History:", history)
+                if best_solution is None or best_solution[0] > presses + new_presses:
+                    best_solution = [presses + new_presses, history.copy()]
+            else:
+                t = find_min(np)
+                print("Got next move:", t)
+                if t is not None and 'buttons' in t:
+                    solution = apply_trial(np, t, presses + new_presses, history)
+                    if solution is not None and (best_solution is None or best_solution[0] > solution[0]):
+                        best_solution = solution
+                else:
+                    print("History:", history)
+                    print("Ending recursion")
+
+        for i in range(len(trial['buttons'])):
+            if v[i] > 0:
+                history.pop(-1)
+            for j in p['buttons'][trial['buttons'][i]]:
+                np['power'][j] += v[i]
+
+    return best_solution
+    
 def sum_presses(problems):
     total = 0
-    for i in range(0, len(problems)):
+    # 38 is the hard one
+    for i in range(38, len(problems)):
         p = problems[i]
         t = find_min(p)
+        c = None
+        history = []
         if t is not None and 'buttons' in t:
-            apply_trial(p, t)
+            c = apply_trial(p, t, 0, history)
+            if c is not None:
+                total += c[0]
+
+                test = replay_history(p, c[1])
+                found_mistake = False
+                for j in range(p['values']):
+                    if test[j] != p['power'][j]:
+                        found_mistake = True 
+
+                if found_mistake:
+                    print("Error: mistake in solution for problem ", i)
+                    print(p['power'])
+                    print(test)
+                    print(p)
+                    print(c)
+                    c = "Error"
+
         else:
             print("Can't solve")
 
-        #presses = make_up_one_power(p, p['power'], 0)
-        #print(presses, p['count'])
-        #if presses is not None:
-        #    total += presses
+        print("finished problem %d, presses %s, total now %d" % (i, c, total))
+        print("\n\n\n")
         break
 
     return total
 
 
-sum_presses(read_input(sys.argv[1]))
+print(sum_presses(read_input(sys.argv[1])))
