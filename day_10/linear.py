@@ -1,29 +1,28 @@
 #!/usr/bin/python3
 
+from multiprocessing.util import debug
+
+
 class Linear:
     def __init__(self, equations, debug = False):
         self.equations = equations
         self.solutions = []
         self.debug = debug
         self.min_set = None
+        self.valid_range = []
+        for i in range(len(equations[0]['coef'])):
+            self.valid_range.append([0, None])  # min, max
 
     def __str__(self):
         ret = "Linear: %d equations, %d unknowns\n" % (len(self.equations), 0 if len(self.equations) == 0 else len(self.equations[0]['coef']))
-        min_set = None
         for i in self.equations:
             ret += "   [ "
-            pos = {}
             for j in range(len(i['coef'])):
                 ret += " %3s " % i['coef'][j]
-                if not self.zero(i['coef'][j]):
-                    pos[j] = i['coef'][j]
-            if min_set is None or len(pos) < len(min_set['set']):
-                min_set = {'set' : pos, 'result' : i['result']}
             ret += " ] -> %s\n" % (i['result'])
         ret += "Solutions: %s\n" % self.solutions
-        ret += "Min set: %s\n" % min_set
-
-        self.min_set = min_set
+        ret += "Min set: %s\n" % self.min_set
+        ret += "Valid ranges: %s\n" % self.valid_range
 
         return ret
 
@@ -35,7 +34,9 @@ class Linear:
         for eq in self.equations:
             neq.append({'coef' : eq['coef'].copy(), 'result' : eq['result']})
 
-        return Linear(neq)
+        nlin = Linear(neq, debug = self.debug)
+        nlin.valid_range = [vr.copy() for vr in self.valid_range]
+        return nlin
 
     def zero(self, num):
         if num > -0.00001 and num < 0.00001:
@@ -61,8 +62,10 @@ class Linear:
                 if self.zero(self.equations[i]['result']):
                     rem.add(i)
                 else:
-                    print("Impossible solution - zero row %d gets non zero result %s" % (i, self.equations[i]['result']))
-                    print(self)
+                    self.min_set = None
+                    if self.debug:
+                        print("Impossible solution - zero row %d gets non zero result %s" % (i, self.equations[i]['result']))
+                        print(self)
                     return
 
         for i in sorted(list(rem), reverse = True):
@@ -89,12 +92,46 @@ class Linear:
                         if self.zero(self.equations[j]['result'] - self.equations[i]['result'] * mult):
                             rem.add(j)
                         else:
-                            print("Impossible solution - similar rows %d & %d get non-similar result" % (i, j))
-                            print(self)
+                            self.min_set = None
+                            if self.debug:
+                                print("Impossible solution - similar rows %d & %d get non-similar result" % (i, j))
+                                print(self)
                             return
 
         for i in sorted(list(rem), reverse = True):
             self.equations.pop(i)
+
+        # see if maximum values for each parameter have changed
+        if len(self.equations) > 0:
+            for i in range(len(self.equations[0]['coef'])):
+                min_val = None
+                max_val = None
+                for j in self.equations:
+                    # work out whether each coefficient and the result have the same sign
+                    signs = [0, 0]
+                    for k in j['coef']:
+                        if not self.zero(k):
+                            signs[0 if k > 0 else 1] += 1
+                    signs[0 if j['result'] > 0 else 1] += 1
+
+                    if signs[0] == 0 or signs[1] == 0:
+                        for k in range(len(j['coef'])):
+                            if not self.zero(j['coef'][k]):
+                                val = j['result'] / j['coef'][k]
+                                if self.zero(val - round(val)):
+                                    val = round(val)
+                                if self.valid_range[k][1] is None or val < self.valid_range[k][1]:
+                                    self.valid_range[k][1] = round(val)
+
+        # recalculate min_set
+        self.min_set = None
+        for i in self.equations:
+            pos = {}
+            for j in range(len(i['coef'])):
+                if not self.zero(i['coef'][j]):
+                    pos[j] = i['coef'][j]
+            if self.min_set is None or len(pos) < len(self.min_set['set']):
+                self.min_set = {'set' : pos, 'result' : i['result']}
 
         if self.debug:
             print(self)
@@ -112,6 +149,8 @@ class Linear:
         i=0
         self.simplify()
         while i < min(len(self.equations), len(self.equations[0]['coef'])):
+            if self.min_set is None:
+                return
             if self.zero(self.equations[i]['coef'][i]):
                 # find a lower row with non-zero coef
                 best = None
@@ -132,7 +171,6 @@ class Linear:
                 self.subtract_rows(j, i, i)
 
             self.simplify()
-            #print(self)
             i += 1
 
     def reduce_rows(self):
@@ -184,7 +222,17 @@ class Linear:
                 sln = i['result'] / i['coef'][found]
                 if self.zero(sln - round(sln)):
                     sln = round(sln)
-                break
+                else:
+                    if self.debug:
+                        print("Error:non-integer solution")
+                    return None
+
+                if sln < self.valid_range[found][0] or sln > self.valid_range[found][1]:
+                    if self.debug:
+                        print("Error:out of range")
+                    return None
+
+                break      
 
         if found is not None:
             self.solutions.append([found, sln])
@@ -193,22 +241,70 @@ class Linear:
                 if self.zero(i['result'] - round(i['result'])):
                     i['result'] = round(i['result'])
 
+            self.valid_range.pop(found)
+
             self.simplify()
-            return found
+            return 1
 
+        return 0
+    
+    def solve(self):
+        self.make_diagonal()
+        self.reduce_rows()
+
+        while True:
+            sv = self.spot_value()            
+            if sv is None:
+                return None
+            if sv == 0:
+                break
+
+        presses = 0
+        for s in self.solutions:
+            presses += s[1]
+
+        if len(self.equations) == 0:
+            if self.debug:
+                print("Solved with %d presses" % presses)
+            return presses
+
+        if self.min_set is None:    
+            if self.debug:
+                print("min_set is None, failed to solve")
+            return None
+
+        b = list(self.min_set['set'].keys())
+
+        # could try and find the variable with the smallest range here, would need to check candidates with same set as b[0]
+        if self.debug:
+            print("Doing speculative solve on variable %s" % (b[0]))
+        best_solution = None
+        for i in range(self.valid_range[b[0]][0], self.valid_range[b[0]][1] + 1):
+            if self.debug:
+                print("Trying speculative b%d = %d" % (b[0], i))
+            c = [0] * len(self.equations[0]['coef'])
+            c[b[0]] = 1
+            spec = [{'coef' : c, 'result' : i}]
+            nlin = self.copy()
+            nlin.add_equations(spec)
+            if self.debug:
+                print(nlin)
+
+            npresses = nlin.solve()
+            if npresses is not None:
+                if self.debug:
+                    print("Guess b%d = %d found speculative solution with %d presses" % (b[0], i, npresses))
+                if best_solution is None or npresses < best_solution[0]:
+                    best_solution = [npresses, nlin.solutions]
+                    if self.debug:
+                        print("New best solution with b%d = %d" % (b[0], i))
+                   
+        if best_solution is not None:
+            self.solutions += best_solution[1]
+            if self.debug:
+                print("Returning combined best solution: %s with %d presses" % (self.solutions, best_solution[0] + presses))
+            return presses + best_solution[0]
+
+        if self.debug:
+            print("Failed to solve")
         return None
-                
-if __name__ == "__main__":
-    print("linear library")
-
-    linear = Linear([{'coef' : [0,1,0,1,0,0], 'result' : 2},
-                    {'coef' : [0,1,0,1,1,1], 'result' : 16},
-                    {'coef' : [0,0,1,1,1,1], 'result' : 21},
-                    {'coef' : [0,1,1,0,0,1], 'result' : 21},
-                    {'coef' : [1,1,0,1,1,0], 'result' : 7}])
-
-    print(linear)
-
-    linear.make_diagonal()  
-
-    print(linear)
