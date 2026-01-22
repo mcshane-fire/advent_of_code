@@ -7,3 +7,6 @@ Done during December 2025, my first try with Advent of Code.  Written in python 
 
 ## 2024
 Started December 2025, written in C++ as I've never written any before, but want to learn more.
+
+## 2023
+Started December 2025, writing more C++, seeing fewer compile errors...
