@@ -9,14 +9,14 @@ struct pos {
     int x, y, d;
 };
 
-int count_energised(std::vector<std::string>& map) {
+int count_energised(std::vector<std::string>& map, int start_x = 0, int start_y = 0, int start_d = 0) {
     int total = 0;
 
     int xd[] = {1, 0, -1, 0};
     int yd[] = {0, -1, 0, 1};
 
     std::vector<std::vector<uint>> history(map.size(), std::vector<uint>(map[0].length(), 0));
-    std::vector<struct pos> explore = {{0, 0, 0}};
+    std::vector<struct pos> explore = {{start_x, start_y, start_d}};
 
     while(explore.size() > 0) {
         auto p = explore.back();
@@ -52,6 +52,21 @@ int count_energised(std::vector<std::string>& map) {
     return total;
 }
 
+int find_max(std::vector<std::string>& map) {
+    int max = 0;
+
+    for(int i=0; i<map.size(); i++) {
+        max = std::max(max, count_energised(map, 0, i, 0));
+        max = std::max(max, count_energised(map, map[0].length()-1, i, 2));
+    }
+    for(int i=0; i<map[0].length(); i++) {
+        max = std::max(max, count_energised(map, i, 0, 3));
+        max = std::max(max, count_energised(map, i, map.size()-1, 1));
+    }
+
+    return max;
+}
+
 
 int main(int argc, char *argv[]) {
     std::ifstream input(argc >= 2 ? argv[1] : "test_input.txt");
@@ -64,6 +79,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << count_energised(map) << "\n";
+    std::cout << "Part2: " << find_max(map) << "\n";
 
     return 0;
 }
