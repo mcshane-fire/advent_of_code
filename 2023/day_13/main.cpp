@@ -5,59 +5,49 @@
 #include <sstream>
 #include <regex>
 
-int find_symmetry(std::vector<int>& nums) {
+int bitcount(int n) {
+    int ret = 0;
+    while(n) {
+        n &= (n-1);
+        ret++;
+    }
+    return ret;
+}
+
+int find_symmetry(std::vector<int>& nums, int flaws) {
     int ret = 0, step = 0;
-
-    //std::cout << "Find: ";
-
     auto it = nums.begin();
 
     while(it+1 != nums.end()) {
         step++;
-        if(*it == *(it+1)) {
-            //std::cout << "found double " << *it;
-            bool match = true;
+        int diff = 0;
+        int match = true;
+        auto fit = it+1;
+        auto rit = it;
 
-            auto fit = it+1;
-            auto rit = it;
-            while(fit != nums.end()) {
-                if(*rit != *fit) {
-                    match = false;
-                }
-                if(rit == nums.begin()) {
-                    break;
-                }
-                rit--;
-                fit++;
+        while(fit != nums.end()) {
+            if((diff += bitcount((*rit) ^ (*fit))) > flaws) {
+                match = false;
             }
-            //std::cout << " match: " << match << "\n";
-            if(match) {
-                ret = step;
+            if(rit == nums.begin()) {
                 break;
             }
+            rit--;
+            fit++;
         }
+        //std::cout << " match: " << match << " with " << diff << "/" << flaws << "flaws\n";
+        if(match && diff == flaws) {
+            ret = step;
+            break;
+        }
+
         it++;
     }
-
-    /*
-    if(ret == 0) {
-        std::cout << "No symmetry: ";
-        for(auto i : nums) {
-            std::cout << i << " ";
-        }
-        std::cout << "\n";
-    } else {
-        std::cout << "Symmetry(" << ret << "): ";
-        for(int i=0; i<nums.size(); i++) {
-            std::cout << nums[i] << (i+1 == ret ? "|" : " ");
-        }
-        std::cout << "\n";
-    }*/
 
     return ret;
 }
 
-int count_symmetries(std::vector<std::vector<std::string>>& maps) {
+int count_symmetries(std::vector<std::vector<std::string>>& maps, int flaws = 0) {
     int total = 0;
 
     for(auto map : maps) {
@@ -75,8 +65,8 @@ int count_symmetries(std::vector<std::vector<std::string>>& maps) {
             rows.push_back(sum);
         }
 
-        total += 100 * find_symmetry(rows);
-        total += find_symmetry(cols);
+        total += 100 * find_symmetry(rows, flaws);
+        total += find_symmetry(cols, flaws);
     }
 
     return total;
@@ -98,6 +88,7 @@ int main(int argc, char *argv[]) {
     } while(more);
 
     std::cout << "Part1: " << count_symmetries(maps) << "\n";
+    std::cout << "Part2: " << count_symmetries(maps, 1) << "\n";
 
     return 0;
 }
