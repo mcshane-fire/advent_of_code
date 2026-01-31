@@ -10,7 +10,7 @@ struct pos {
     int x, y, z;
 };
 
-int count_lose(std::vector<std::vector<struct pos>>& bricks) {
+std::pair<int,int> make_fall(std::vector<std::vector<struct pos>>& bricks) {
     int x_max = 0;
     int y_max = 0;
 
@@ -117,7 +117,44 @@ int count_lose(std::vector<std::vector<struct pos>>& bricks) {
         //std::cout << "\n";
     }    
 
-    return destroyable;
+    std::vector<int> causes(bricks.size());
+    int chain_reactions = 0;
+
+    for(int i=0; i<bricks.size(); i++) {
+        //std::cout << "Starting with brick " << i << "\n";
+
+        std::set<int> removed = {i};
+        std::vector<int> removing = {i};
+        while(removing.size() > 0) {
+            int r = removing.back();
+            removing.pop_back();
+            removed.insert(r);
+
+            //std::cout << " - remove brick " << r << "\n";
+
+            for(auto p : supports[r]) {
+                if(!removed.contains(p)) {
+                    //std::cout << "   - removing support on brick " << p << "\n";
+                    bool safe = false;
+                    for(auto n : supported_by[p]) {
+                        //std::cout << "     : supported by " << n << (removed.contains(n) ? " which has been removed" : " which is still there") << "\n";
+                        if(!removed.contains(n)) {
+                            safe = true;
+                            break;
+                        }
+                    }
+                    //std::cout << "   - this is " << (safe ? "safe" : "now falling") << "\n";
+                    if(!safe) {
+                        removing.push_back(p);
+                    }
+                }
+            }
+        }
+        //std::cout << ": finished analysis: " << removed.size() << " to fall\n";
+        chain_reactions += removed.size() - 1;
+    }
+
+    return {destroyable, chain_reactions};
 }
 
 int main(int argc, char *argv[]) {
@@ -143,7 +180,9 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "Part1: " << count_lose(bricks) << "\n";
+    auto [a,b] = make_fall(bricks);
+    std::cout << "Part1: " << a << "\n";
+    std::cout << "Part2: " << b << "\n";
 
     return 0;
 }
