@@ -58,14 +58,6 @@ void count_destinations_from(std::vector<std::string>& map, int steps, pos p, st
         }
     }
 
-    /*
-    std::cout << "count from " << p << " : ";
-    for(auto n : num) {
-        std::cout << n << " ";
-    }
-    std::cout << "\n";
-    */
-
     num.push_back(frontier[steps&1].size());
 }
 
@@ -151,16 +143,35 @@ enum expand {
     NORTH_WEST,
     SOUTH_EAST,
     SOUTH_WEST,
+    CENTER,
 };
 
-void min_distance_to(std::vector<std::string>& map, pos start, std::map<expand,pos>& compass, std::map<pos,std::map<pos,int>>& best) {
+struct compass_info {
+    expand dir;
+    pos p;
+    expand opposite;
+    int subtract;
+    std::vector<int> best;
+    std::vector<int> cover;
+    std::string name;
+    std::vector<std::pair<expand,expand>> next;
+
+    compass_info(expand _dir, pos _p, expand _opp, int _sub, std::string _name, std::vector<std::pair<expand,expand>> _next) :
+            dir(_dir), p(_p), opposite(_opp), subtract(_sub), name(_name), next(_next) {
+        best = std::vector<int>();
+        cover = std::vector<int>();
+    };
+};
+
+int min_distance_to(std::vector<std::string>& map, expand start, std::vector<compass_info>& compass, std::vector<int>& best) {
     int xd[] = {1, 0, -1, 0};
     int yd[] = {0, -1, 0, 1};
 
     std::map<int,std::vector<pos>> frontier;
     std::map<pos,int> local_best;
 
-    frontier[0] = std::vector<pos>() = {start};
+    frontier[0] = std::vector<pos>();
+    frontier[0].push_back(compass[start].p);
 
     while(frontier.size() > 0) {
         auto v = *frontier.begin();
@@ -185,51 +196,43 @@ void min_distance_to(std::vector<std::string>& map, pos start, std::map<expand,p
         }
     }
 
-    best[start] = std::map<pos,int>();
+    int max_dist = 0;
 
-    for(auto &p : compass) {
-        best[start][p.second] = local_best[p.second];
+    for(int i=0; i<CENTER; i++) {
+        best.push_back(local_best[compass[i].p]);
+        max_dist = std::max(max_dist, local_best[compass[i].p]);
     }
 
-    /*
-    std::cout << "\n";
-    for(int y=0; y<map.size(); y++) {
-        for(int x=0; x<map[y].length(); x++) {
-            if(local_best.contains({x,y})) {
-                std::cout << std::format("{:3d} ", local_best[{x,y}]);
-            } else {
-                std::cout << std::format("{:c}{:c}{:c} ", map[y][x], map[y][x], map[y][x]);
-            }
-        }
-        std::cout << "\n";
-    }*/
+    return max_dist;
 }
+
 
 struct grid {
     expand dir;
-    pos p;
+    expand start;
+    expand end;
     int steps_remaining;
 
-    grid(expand _dir, pos _p, int _steps) : dir(_dir), p(_p), steps_remaining(_steps) {};
-    //grid(const grid &a) : p(a.p),dir(a.dir),steps_remaining(a.steps_remaining) {};
+    grid(expand _dir, expand _start, expand _end, int _steps_remaining) : dir(_dir), start(_start), end(_end), steps_remaining(_steps_remaining) {};
 };
 
-int get_covered(std::map<expand,pos>& compass, std::map<pos,std::vector<int>>& cover, int steps, pos p) {
+int get_covered(std::vector<int>& cover, int steps) {
     int total = 0;
-    if(steps < cover[p].size()) {
-        total += cover[p][steps];
+    if(steps < cover.size()) {
+        total += cover[steps];
     }
     else {
         if(steps & 1) {
-            total += cover[p][cover[p].size()-2];
+            total += cover[cover.size()-2];
         } else {
-            total += cover[p].back();
+            total += cover.back();
         }
     }
     return total;
 }
 
-int count_infinite_destinations(std::vector<std::string>& map, int steps) {
+
+int64_t count_infinite_destinations(std::vector<std::string>& map, int steps) {
     int xd[] = {1, 0, -1, 0};
     int yd[] = {0, -1, 0, 1};
 
@@ -241,100 +244,66 @@ int count_infinite_destinations(std::vector<std::string>& map, int steps) {
         }
     } 
 
-    // combine into struct?
-    std::map<expand,pos> compass = {{NORTH,{x,0}}, {EAST,{(int) map[0].length()-1,y}}, {SOUTH,{x,(int) map.size()-1}}, {WEST,{0,y}},
-                    {NORTH_EAST,{(int) map[0].length()-1,0}}, {NORTH_WEST,{0,0}}, {SOUTH_EAST,{(int) map[0].length()-1,(int) map.size()-1}}, {SOUTH_WEST,{0,(int) map.size()-1}}};
-    std::map<expand,expand> opposite = {{NORTH,SOUTH}, {EAST,WEST}, {SOUTH,NORTH}, {WEST,EAST}, {NORTH_EAST,SOUTH_WEST}, {SOUTH_WEST,NORTH_EAST}, 
-                    {NORTH_WEST,SOUTH_EAST}, {SOUTH_EAST,NORTH_WEST}};
-    std::map<expand,int> subtract = {{NORTH,1}, {WEST,1}, {EAST,1}, {SOUTH,1}, {NORTH_EAST,2}, {NORTH_WEST,2}, {SOUTH_EAST,2}, {SOUTH_WEST,2}};
-    std::map<pos,std::map<pos,int>> best;
+    std::vector<compass_info> compass = {{NORTH, {x,0}, SOUTH, 1, "North", {}},
+                                         {SOUTH, {x,(int) map.size()-1}, NORTH, 1, "South", {}},
+                                         {EAST, {(int) map[0].length()-1,y}, WEST, 1, "East ", {}},
+                                         {WEST, {0,y}, EAST, 1, "West ", {}},
+                                         {NORTH_EAST, {(int) map[0].length()-1,0}, SOUTH_WEST, 2, "NEast", {{NORTH,NORTH_WEST}, {EAST,SOUTH_EAST}, {NORTH_EAST,NORTH_EAST}}},
+                                         {NORTH_WEST, {0,0}, SOUTH_EAST, 2, "NWest", {{NORTH,NORTH_EAST}, {WEST,SOUTH_WEST}, {NORTH_WEST,NORTH_WEST}}},
+                                         {SOUTH_EAST, {(int) map[0].length()-1,(int) map.size()-1}, NORTH_WEST, 2, "SEast", {{SOUTH,SOUTH_WEST}, {EAST,NORTH_EAST}, {SOUTH_EAST,SOUTH_EAST}}},
+                                         {SOUTH_WEST, {0,(int) map.size()-1}, NORTH_EAST, 2, "SWest", {{SOUTH,SOUTH_EAST},{WEST,NORTH_WEST},{SOUTH_WEST,SOUTH_WEST}}},
+                                         {CENTER, {x,y}, CENTER, 0, "Centr", {}}};
 
-    min_distance_to(map, {x,y}, compass, best);
     for(auto &p : compass) {
-        min_distance_to(map, p.second, compass, best);
-    }
-
-    std::map<pos,std::vector<int>> cover;
-
-    for(auto&m : best) {
-        cover[m.first] = std::vector<int>();
-        int max = (*std::max_element(m.second.begin(), m.second.end(), [](const std::pair<pos,int> &a, const std::pair<pos,int> &b) { return a.second < b.second; })).second;
-        count_destinations_from(map, (max+10) & ~1, m.first, cover[m.first]);
+        int m = min_distance_to(map, p.dir, compass, p.best);
+        count_destinations_from(map, (m+10) & ~1, p.p, p.cover);
     }
 
     std::vector<grid> explore;
 
-    for(auto &p : opposite) {
-        explore.emplace_back(p.first, compass.at(p.second), steps - best[{x,y}][compass.at(p.first)] - subtract.at(p.first));
+    for(auto &p : compass) {
+        explore.emplace_back(p.dir, p.opposite, p.dir, steps - compass[CENTER].best[p.dir] - p.subtract);
     }
 
-    std::map<expand,std::string> smap = {{NORTH,"North"}, {EAST,"East"}, {SOUTH,"South"}, {WEST,"West"},
-                            {NORTH_EAST,"North east"}, {NORTH_WEST,"North west"}, {SOUTH_EAST, "South east"}, {SOUTH_WEST,"South west"}};
-
-    int total = get_covered(compass, cover, steps, {x,y});
-
-    //std::cout << "\nReady\n";
+    int64_t total = get_covered(compass[CENTER].cover, steps);
 
     while(explore.size() > 0) {
         grid g = explore.back();
         explore.pop_back();
+        int64_t n = get_covered(compass[g.start].cover, g.steps_remaining);
 
-        //std::cout << "Explore " << smap[g.dir] << " " << g.p << " " << g.steps_remaining << " total: " << total;
-
-        if(g.steps_remaining < 0) {
-            //std::cout << "\n";
+        if(g.dir == CENTER || g.steps_remaining < 0) {
             continue;
         }
 
-        int n = get_covered(compass, cover, g.steps_remaining, g.p);
+        int scan, steps;
 
-        //std::cout << " + " << n << " = " << (total+n) << "\n";
-        total += n;
+        switch(g.dir) {
+            case NORTH: case EAST: case SOUTH: case WEST:
+                steps = compass[g.start].best[g.end] + compass[g.dir].subtract;
+                scan = (g.steps_remaining - compass[g.start].cover.size()) / (steps * 2);
+                if(scan > 0) {
+                    n += get_covered(compass[g.start].cover, g.steps_remaining - compass[g.start].best[g.end]-1);
+                    n *= scan;
+                    g.steps_remaining -= scan * steps * 2;
+                }
+                else {
+                    g.steps_remaining -= steps;
+                }
+            
+                explore.push_back(g);
+                break;         
 
-
-        switch(g.dir) { 
-            case NORTH:
-            explore.emplace_back(g.dir, g.p, g.steps_remaining - best[g.p][pos(g.p.x, 0)]-1);
-            break;         
-
-            case EAST:
-            explore.emplace_back(g.dir, g.p, g.steps_remaining - best[g.p][pos(map[0].length()-1, g.p.y)]-1);
-            break;         
-
-            case SOUTH:
-            explore.emplace_back(g.dir, g.p, g.steps_remaining - best[g.p][pos(g.p.x, map.size()-1)]-1);
-            break;         
-
-            case WEST:
-            explore.emplace_back(g.dir, g.p, g.steps_remaining - best[g.p][pos(0, g.p.y)]-1);
-            break;         
-
-            case NORTH_EAST:
-            explore.emplace_back(NORTH, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_WEST)] - 1);
-            explore.emplace_back(EAST, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_EAST)] - 1);
-            explore.emplace_back(NORTH_EAST, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_EAST)] - 2);
-            break;
-
-            case NORTH_WEST:
-            explore.emplace_back(NORTH, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_EAST)] - 1);
-            explore.emplace_back(WEST, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_WEST)] - 1);
-            explore.emplace_back(NORTH_WEST, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_WEST)] - 2);
-            break;
-
-            case SOUTH_WEST:
-            explore.emplace_back(SOUTH, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_EAST)] - 1);
-            explore.emplace_back(WEST, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_WEST)] - 1);
-            explore.emplace_back(SOUTH_WEST, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_WEST)] - 2);
-            break;
-
-            case SOUTH_EAST:
-            explore.emplace_back(SOUTH, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_WEST)] - 1);
-            explore.emplace_back(EAST, g.p, g.steps_remaining - best[g.p][compass.at(NORTH_EAST)] - 1);
-            explore.emplace_back(SOUTH_EAST, g.p, g.steps_remaining - best[g.p][compass.at(SOUTH_EAST)] - 2);
-            break;
+            case NORTH_EAST: case NORTH_WEST: case SOUTH_EAST: case SOUTH_WEST:
+                for(auto&p : compass[g.dir].next) {
+                    explore.emplace_back(p.first, g.start, p.second, g.steps_remaining - compass[g.start].best[p.second] - compass[p.first].subtract);
+                }
+                break;
         }
+
+        total += n;        
     }
-    
+
     return total;
 
     /*
@@ -365,8 +334,8 @@ int count_infinite_destinations(std::vector<std::string>& map, int steps) {
         return 0;
     }
     
-    return frontier.size();*/
-    
+    return frontier.size();
+    */
 }
 
 int main(int argc, char *argv[]) {
@@ -379,19 +348,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << count_destinations(map, 64) << "\n";
-
-    /*
-    for(int i=1; i<=100; i++) {
-        int n = count_infinite_destinations(map, i);
-        if(n == 0) {
-            break;
-        }
-        std::cout << i << "  " << n << "\n";
-    }*/
-
-    std::cout << "Part2: " << count_infinite_destinations(map, 100) << "\n";
+    std::cout << "Part2: " << count_infinite_destinations(map, 26501365) << "\n";
 
     return 0;
 }
-
-
