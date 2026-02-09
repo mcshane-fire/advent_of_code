@@ -6,6 +6,7 @@
 #include <set>
 #include <regex>
 #include <sstream>
+#include <numeric>
 
 enum module_type {
     BROADCAST,
@@ -61,7 +62,7 @@ void send_pulse(std::map<std::string,struct module>& modules, std::vector<struct
                 if(std::find_if(modules[act.target].inputs.begin(), modules[act.target].inputs.end(),
                     [&](const std::pair<std::string,bool>& p) { return p.second == false; }) == modules[act.target].inputs.end()) {
                     // no low signals found, so all are high, send low
-                    //std::cout << " all are high, queueing low pulse\n";
+                    //std::cout << act.target << " all are high, queueing low pulse\n";
                     send = false;
                 //} else {
                 //    std::cout << " found a low, queueing high pulse\n";
@@ -73,7 +74,7 @@ void send_pulse(std::map<std::string,struct module>& modules, std::vector<struct
     }
 }
 
-int64_t count_pulses(std::map<std::string,struct module>& modules, int pulses) {
+int64_t count_pulses(std::map<std::string,struct module> modules, int pulses) {
     int64_t total_low = 0;
     int64_t total_high = 0;
 
@@ -96,51 +97,22 @@ int64_t count_pulses(std::map<std::string,struct module>& modules, int pulses) {
     return total_high * total_low;
 }
 
-int64_t count_until_rx_one_low(std::map<std::string,struct module>& modules) {
+int64_t count_until_rx_one_low(std::map<std::string,struct module> modules) {
 
-    int num = 0;
-    for(auto& p : modules) {
-        if(p.second.type == CONJUNCTION) {
-            num += modules[p.first].inputs.size();
-        }
-    }
+    std::vector<std::pair<std::string,std::vector<std::string>>> accu = {
+        {"ns", {"br", "gv", "jl", "fp", "rb", "mf", "gp", "pb", "xv", "kh", "jz", "lj"}},
+        {"hh", {"nc", "hj", "lk", "zd", "fm", "kq", "pp", "vs", "bp", "rv", "rk", "hr"}},
+        {"kz", {"zn", "fv", "nh", "vx", "df", "gf", "zf", "qf", "tn", "lt", "ls", "hc"}},
+        {"ck", {"tf", "tx", "mr", "rg", "tp", "pc", "vh", "tg", "cc", "rj", "sc", "vb"}}};
+    std::set<std::string> track = {"lr", "gt", "nl", "vr"};
+    std::vector<int64_t> cycles;
 
-    std::vector<std::map<int,int>> history(num, std::map<int,int>());
-    std::vector<std::pair<bool,int>> runs(num, std::pair<bool,int>());
     std::map<enum module_type,char> tmap = {{FLIP_FLOP,'%'}, {CONJUNCTION,'&'}};
     int64_t ret = 0;
-    while(ret < 300000) {
+    while(ret < 4100) {
         // send low to broadcast
         ret++;
-        if(true) {
-            int num = 0;
-            for(auto& p : modules) {
-                if(p.second.type == CONJUNCTION) {
-                    //std::cout << p.first << "(";
-                    for(auto& inp : modules[p.first].inputs) {
-                        //std::cout << inp.second;
-                        if(runs[num].second == 0) {
-                            runs[num].first = inp.second;
-                            runs[num].second = 1;
-                        } else if(runs[num].first != inp.second) {
-                            if(!history[num].contains(runs[num].second)) {
-                                history[num][runs[num].second] = 0;
-                            } else {
-                                history[num][runs[num].second]++;
-                            }
-                            runs[num].first = inp.second;
-                            runs[num].second = 1;
-                        } else {
-                            runs[num].second++;
-                        }
-                        num++;
-                    }
-                    //std::cout << ")";
-                }
-            }
-            //std::cout << "\n";
-            //std::cout << ret << " " << num << " " << std::format("{:038b}", state) << "\n";
-        }
+
         std::vector<struct pulse> next;
         next.emplace_back("button", "broadcaster", false);
         while(next.size() > 0) {
@@ -149,23 +121,36 @@ int64_t count_until_rx_one_low(std::map<std::string,struct module>& modules) {
             //std::cout << "send_pulse: "  << p.source << "  ---" << (p.high ? "high" : "low") << "---  " << p.target << "\n";
 
             send_pulse(modules, next, p);
-            if(p.target == "rx" && !p.high) {
-                std::cout << " low pulse to rx " << "\n";
-                break;
+
+            if(track.contains(p.target) && !p.high) {
+                //std::cout << " low pulse to " << p.target << " after " << ret << "\n";
+                cycles.push_back(ret);
             }
         }
-    }
 
-    for(auto& h : history) {
-        for(auto& p : h) {
-            if(p.second > 0) {
-                std::cout << p.first << "," << p.second << "  ";
+        /*
+        for(auto &p : accu) {
+            std::cout << (modules[p.first].state ? "1" : "0") << ":";
+            for(auto &s : p.second) {
+                std::cout << (modules[s].state ? "1" : "0");
             }
+            std::cout << "  ";
         }
         std::cout << "\n";
+        */
     }
 
-    return ret;
+
+    int64_t total = 0;
+    
+    if(cycles.size() > 1) {
+        total = std::lcm(cycles[0], cycles[1]);
+        for(int i=2; i<cycles.size(); i++) {
+            total = std::lcm(total, cycles[i]);
+        }
+    }
+
+    return total;
 }
 
 int main(int argc, char *argv[]) {
@@ -214,5 +199,3 @@ int main(int argc, char *argv[]) {
 
     return 0;
 }
-
-
