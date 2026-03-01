@@ -99,27 +99,9 @@ void simplify(std::vector<Valve> &valves, int &current, int remove, int max_cost
     valves[remove].linked = 0;
     valves[remove].cost1 = 0;
     valves[remove].cost2 = 0;
-
-    /*
-    for(int i=0; i<valves.size(); i++) {
-        if(i > remove) {
-            valves[i].id--;
-        }
-        for(auto &l : valves[i].dest) {
-            if(l.id > remove) {
-                l.id--;
-            }
-        }
-    }
-
-    valves.erase(valves.begin() + remove);
-    if(current > remove) {
-        current--;
-    }*/
 }
 
 struct State {
-    int score;
     int time_left;
     int pos;
     std::vector<Valve> valves;
@@ -131,7 +113,12 @@ int release_the_pressure(std::vector<Valve> &valves, int start) {
     int in_flight = 1;
     int added = 0;
 
-    exp[0] = std::vector<State> {State(0, 30, start, valves)};
+    exp[0] = std::vector<State> {State(30, start, valves)};
+
+    if(valves[start].flow != 0) {
+        std::cout << "Expecting first valve to have no flow\n";
+        return -1;
+    }
 
     int max_score = 0;
 
@@ -151,52 +138,38 @@ int release_the_pressure(std::vector<Valve> &valves, int start) {
                 }
             }
 
-            if(s.time_left == 0 || (s.valves[s.pos].flow == 0 && s.valves[s.pos].linked == 0)) {
-                if(s.score > max_score) {
-                    std::cout << "score:" << s.score << " in_flight:" << in_flight << " added:" << added << "\n";
-                }
-                max_score = std::max(max_score, s.score);
-                //if(max_score == 1850) {
-                //    return max_score;
-                //}
-                continue;
-            }
-
             int left = std::accumulate(s.valves.begin(), s.valves.end(), 0, [](int a, const Valve &v) { return a + (v.flow > 0 ? v.flow : 0); });
-            if(s.score + (left * s.time_left) < max_score) {
+            if(lp.key() + (left * s.time_left) < max_score) {
                 continue;
             }
 
-            if(s.valves[s.pos].flow > 0) {
-                int new_score = lp.key() + (s.valves[s.pos].flow * (s.time_left-1));
-                int new_index = new_score;
-                if(!exp.contains(new_index)) {
-                    exp[new_index] = std::vector<State>();
-                }
-                exp[new_index].emplace_back(new_score, s.time_left-1, s.pos, s.valves);
-                exp[new_index].back().valves[s.pos].flow = 0;
-                in_flight++;
-                added++;
-            }
             int bp = 0;
+            bool found_better = false;
             while(s.valves[s.pos].linked >= (1<<bp)) {
                 if(s.valves[s.pos].connected_to(bp)) {
-                    int cost = s.valves[s.pos].cost_to(bp);
+                    int cost = s.valves[s.pos].cost_to(bp) + 1;
                     if(cost < s.time_left) {
-                        int new_index = s.score;
-                        if(!exp.contains(new_index)) {
-                            exp[new_index] = std::vector<State>();
+                        int new_score = lp.key() + (s.valves[bp].flow * (s.time_left - cost));
+                        if(!exp.contains(new_score)) {
+                            exp[new_score] = std::vector<State>();
                         }
 
-                        exp[new_index].emplace_back(s.score, s.time_left - cost, bp, s.valves);
-                        if(exp[new_index].back().valves[s.pos].flow == 0) {
-                            simplify(exp[new_index].back().valves, exp[new_index].back().pos, s.pos, s.time_left - cost);
-                        }
+                        exp[new_score].emplace_back(s.time_left - cost, bp, s.valves);
+                        simplify(exp[new_score].back().valves, exp[new_score].back().pos, s.pos, s.time_left - cost);
                         in_flight++;
                         added++;
+                        found_better = true;
                     }
                 }
                 bp++;
+            }
+
+            if(!found_better) {
+                if(lp.key() > max_score) {
+                    std::cout << "score:" << lp.key() << " in_flight:" << in_flight << " added:" << added << "\n";
+                }
+                max_score = std::max(max_score, lp.key());
+                continue;
             }
         }
     }
@@ -241,7 +214,6 @@ void old_simplify(std::vector<Old_Valve> &valves, int &current, int remove) {
     }
 }
 
-
 int get_index(std::map<std::string,int> &names, std::vector<Old_Valve> &valves, std::string name) {
     int id;
     if(names.contains(name)) {
@@ -252,6 +224,34 @@ int get_index(std::map<std::string,int> &names, std::vector<Old_Valve> &valves, 
         valves.emplace_back(id, -1);
     }
     return id;
+}
+
+void find_paths(std::vector<Old_Valve> &valves) {
+    for(int start=0; start<valves.size(); start++) {
+        std::map<int,std::vector<int>> exp;
+
+        for(auto &l : valves[start].dest) {
+            exp[l.cost].push_back(l.id);
+        }
+
+        valves[start].dest.resize(0);
+
+        while(exp.size() > 0) {
+            auto le = exp.extract(exp.begin());
+
+            for(int d : le.mapped()) {
+                auto it = std::find(valves[start].dest.begin(), valves[start].dest.end(), d);
+                if(it == valves[start].dest.end()) {
+                    valves[start].dest.emplace_back(d, le.key());
+                    for(auto &l : valves[d].dest) {
+                        if(l.id != start && std::find(valves[start].dest.begin(), valves[start].dest.end(), l.id) == valves[start].dest.end()) {
+                            exp[le.key() + l.cost].push_back(l.id);
+                        }
+                    }
+                }         
+            }
+        }
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -287,6 +287,13 @@ int main(int argc, char *argv[]) {
         }
         old_simplify(valves, id, std::distance(valves.begin(), it));
     }
+
+    if(valves.size() > 16) {
+        std::cout << "Problem too large\n";
+        return 0;
+    }
+
+    find_paths(valves);
 
     std::vector<Valve> stripped_valves;
     for(auto &v : valves) {
