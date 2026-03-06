@@ -107,16 +107,17 @@ struct State {
     std::vector<Valve> valves;
 };
 
-int release_the_pressure(std::vector<Valve> &valves, int start) {
+int release_the_pressure(std::vector<Valve> valves, int start, int time_left, bool spawn) {
 
     std::map<int,std::vector<State>> exp;
     int in_flight = 1;
     int added = 0;
+    int maximum_depth = spawn ? valves.size()/2 : 0;
 
-    exp[0] = std::vector<State> {State(30, start, valves)};
+    exp[0] = std::vector<State> {State(time_left, start, valves)};
 
     if(valves[start].flow != 0) {
-        std::cout << "Expecting first valve to have no flow\n";
+        std::cout << "Expecting first valve " << start << " to have no flow, instead found " << valves[start].flow << "\n";
         return -1;
     }
 
@@ -138,9 +139,26 @@ int release_the_pressure(std::vector<Valve> &valves, int start) {
                 }
             }
 
-            int left = std::accumulate(s.valves.begin(), s.valves.end(), 0, [](int a, const Valve &v) { return a + (v.flow > 0 ? v.flow : 0); });
-            if(lp.key() + (left * s.time_left) < max_score) {
-                continue;
+            if(spawn) {
+                int left = std::count_if(s.valves.begin(), s.valves.end(), [](const Valve &v) { return v.flow >= 0; });
+                if(left < maximum_depth) {
+                    continue;
+                }
+
+                std::vector<Valve> spawn_valves = s.valves;
+                if(s.pos != start) {
+                    simplify(spawn_valves, start, s.pos, time_left);
+                }
+                int total_score = lp.key() + release_the_pressure(spawn_valves, start, time_left, false);
+                if(total_score > max_score) {
+                    std::cout << "combined score(" << left << "," << lp.key() << "):" << total_score << " in_flight:" << in_flight << " added:" << added << "\n";
+                }
+                max_score = std::max(max_score, total_score);
+            } else {
+                int left = std::accumulate(s.valves.begin(), s.valves.end(), 0, [](int a, const Valve &v) { return a + (v.flow > 0 ? v.flow : 0); });
+                if(lp.key() + (left * s.time_left) < max_score) {
+                    continue;
+                }
             }
 
             int bp = 0;
@@ -155,7 +173,9 @@ int release_the_pressure(std::vector<Valve> &valves, int start) {
                         }
 
                         exp[new_score].emplace_back(s.time_left - cost, bp, s.valves);
-                        simplify(exp[new_score].back().valves, exp[new_score].back().pos, s.pos, s.time_left - cost);
+                        if(!spawn || s.pos != start) {
+                            simplify(exp[new_score].back().valves, exp[new_score].back().pos, s.pos, spawn ? time_left : s.time_left - cost); 
+                        }
                         in_flight++;
                         added++;
                         found_better = true;
@@ -164,10 +184,10 @@ int release_the_pressure(std::vector<Valve> &valves, int start) {
                 bp++;
             }
 
-            if(!found_better) {
-                if(lp.key() > max_score) {
-                    std::cout << "score:" << lp.key() << " in_flight:" << in_flight << " added:" << added << "\n";
-                }
+            if(!spawn && !found_better) {
+                //if(lp.key() > max_score) {
+                    //std::cout << "score:" << lp.key() << " in_flight:" << in_flight << " added:" << added << "\n";
+                //}
                 max_score = std::max(max_score, lp.key());
                 continue;
             }
@@ -288,7 +308,7 @@ int main(int argc, char *argv[]) {
         old_simplify(valves, id, std::distance(valves.begin(), it));
     }
 
-    if(valves.size() > 16) {
+    if(valves.size() > 20) {
         std::cout << "Problem too large\n";
         return 0;
     }
@@ -304,6 +324,7 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "Part1: " << release_the_pressure(stripped_valves, id) << "\n";
+    std::cout << "Part1: " << release_the_pressure(stripped_valves, id, 30, false) << "\n";
+    std::cout << "Part2: " << release_the_pressure(stripped_valves, id, 26, true) << "\n";
     return 0;
 }
