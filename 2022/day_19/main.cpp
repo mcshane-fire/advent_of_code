@@ -130,9 +130,13 @@ void make_geode_robot2(blueprint &b, state &s, std::vector<state> &exp) {
     }
 }
 
-int find_best(blueprint &b, int max_ore) {
+int find_best(blueprint &b, int max_ore, int steps = 0) {
     
     std::vector<state> exp = {{}};
+
+    if(steps != 0) {
+        exp[0].time_left = steps;
+    }
 
     int best = 0;
     int finished = 0;
@@ -144,15 +148,11 @@ int find_best(blueprint &b, int max_ore) {
         exp.pop_back();
 
         if(s.time_left == 0) {
-            if(s.geode >= 12) {
-                best = std::max(best, s.geode);
-            } else if(s.geode > 0) {
-                best = std::max(best, s.geode);
+            if(s.geode > best) {
+                best = s.geode;
+                //std::cout << finished << " " << exp.size() << " " << best << "\n";
             }
             finished++;
-            //if(((finished) % 10000) == 0) {
-            //    std::cout << finished << " " << exp.size() << " " << best << "\n";
-            //}
         } else {    
             std::string step = "---";
             if(s.ore_robot < max_ore) {
@@ -172,9 +172,26 @@ int sum_scores(std::vector<blueprint> &blueprints) {
     int total = 0;
 
     for(auto &b : blueprints) {
-        int best = find_best(b, 6);
-        std::cout << b.num << ": best is: " << best << "\n";
+        int best = find_best(b, 4);
+        //std::cout << b.num << ": best is: " << best << "\n";
         total += best * b.num;
+    }
+
+    return total;
+}
+
+int first_three(std::vector<blueprint> &blueprints) {
+    int total = 1;
+    int i = 0;
+
+    for(auto &b : blueprints) {
+        int best = find_best(b, 5, 32);
+        //std::cout << b.num << ": best is: " << best << "\n";
+        total *= best;
+        i++;
+        if(i == 3) {
+            break;
+        }
     }
 
     return total;
@@ -197,43 +214,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << sum_scores(blueprints) << "\n";
+    std::cout << "Part2: " << first_three(blueprints) << "\n";
 
     return 0;
 }
-
-/*
-
-1: () best is: 2
-2: () best is: 1
-3: () best is: 0
-4: () best is: 0
-5: () best is: 1
-6: () best is: 0
-7: () best is: 2
-8: () best is: 1
-9: () best is: 6
-10: () best is: 0
-11: () best is: 2
-12: () best is: 0
-13: () best is: 3
-14: () best is: 0
-15: () best is: 0
-16: () best is: 0
-17: () best is: 0
-18: () best is: 8
-19: () best is: 5
-20: () best is: 0
-21: () best is: 0
-22: () best is: 0
-23: () best is: 9
-24: () best is: 9
-25: () best is: 3
-26: () best is: 0
-27: () best is: 1
-28: () best is: 7
-29: () best is: 0
-30: () best is: 8
-1346
-
-
-*/
