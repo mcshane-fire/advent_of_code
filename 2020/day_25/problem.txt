@@ -35,3 +35,4 @@ Then, suppose you know that the door's public key is 17807724. By the same proce
 At this point, you can use either device's loop size with the other device's public key to calculate the encryption key. Transforming the subject number of 17807724 (the door's public key) with a loop size of 8 (the card's loop size) produces the encryption key, 14897079. (Transforming the subject number of 5764801 (the card's public key) with a loop size of 11 (the door's loop size) produces the same encryption key: 14897079.)
 
 What encryption key is the handshake trying to establish?
+cd
