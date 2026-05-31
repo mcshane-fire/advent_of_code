@@ -9,49 +9,33 @@ struct Cube {
     int x;
     int y;
     int z;
+    int w;
 
-    Cube(int _x, int _y, int _z) : x(_x), y(_y), z(_z) {}
+    Cube(int _x, int _y, int _z, int _w = 0) : x(_x), y(_y), z(_z), w(_w) {}
 
     auto operator<=>(const Cube &lhs) const = default;
 
     Cube operator+(const Cube &c) const {
-        return {x+c.x, y+c.y, z+c.z};
+        return {x+c.x, y+c.y, z+c.z, w+c.w};
     }
 };
 
-void print(std::set<Cube> &cubes) {
-    int x_min = 0;
-    int x_max = 0;
-    int y_min = 0;
-    int y_max = 0;
-    int z_min = 0;
-    int z_max = 0;
-    for(auto &c : cubes) {
-        x_min = std::min(x_min, c.x);
-        x_max = std::max(x_max, c.x);
-        y_min = std::min(y_min, c.y);
-        y_max = std::max(y_max, c.y);
-        z_min = std::min(z_min, c.z);
-        z_max = std::max(z_max, c.z);
-    }
+int count_active(std::set<Cube> cubes, int steps, int dimen = 3) {
+    std::vector<Cube> cdiff;
 
-    for(int z=z_min; z<=z_max; z++) {
-        std::cout << "z = " << z << "\n";
-        for(int y=y_min; y<=y_max; y++) {
-            for(int x=x_min; x<=x_max; x++) {
-                std::cout << (cubes.contains(Cube(x,y,z)) ? '#' : '.');
+    for(int x=-1; x<=1; x++) {
+        for(int y=-1; y<=1; y++) {
+            for(int z=-1; z<=1; z++) {
+                int w_min = dimen == 4 ? -1 : 0;
+                int w_max = dimen == 4 ? 1 : 0;
+                for(int w=w_min; w<=w_max; w++) {
+                    if(!(x==0 && y==0 && z==0 && w==0)) {
+                        cdiff.emplace_back(x, y, z, w);
+                    }
+                }
             }
-            std::cout << "\n";
         }
-        std::cout << "\n";
     }
-}
-
-int count_active(std::set<Cube> cubes, int steps) {
-    std::vector<Cube> cdiff = {
-        {-1,-1,-1}, {0,-1,-1}, {1,-1,-1}, {-1,0,-1}, {0,0,-1}, {1,0,-1}, {-1,1,-1}, {0,1,-1}, {1,1,-1},
-        {-1,-1,0}, {0,-1,0}, {1,-1,0}, {-1,0,0}, {1,0,0}, {-1,1,0}, {0,1,0}, {1,1,0},
-        {-1,-1,1}, {0,-1,1}, {1,-1,1}, {-1,0,1}, {0,0,1}, {1,0,1}, {-1,1,1}, {0,1,1}, {1,1,1}};
 
     for(int i=0; i<steps; i++) {
         std::map<Cube,int> adj;
@@ -77,8 +61,6 @@ int count_active(std::set<Cube> cubes, int steps) {
                 cubes.insert(p.first);
             }
         }
-
-        //print(cubes);
     }
     return cubes.size();
 }
@@ -100,6 +82,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << count_active(cubes, 6) << "\n";
+    std::cout << "Part2: " << count_active(cubes, 6, 4) << "\n";
 
     return 0;
 }
