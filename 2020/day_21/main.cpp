@@ -45,7 +45,7 @@ int bitcount(int num) {
     return count;
 }
 
-int find_non_toxic(std::vector<Meal> &meals, std::vector<std::string> &allergens) {
+int find_non_toxic(std::vector<Meal> &meals, std::vector<std::string> &allergens, std::string &all) {
     std::map<std::string,std::set<int>> map;
     std::map<std::string,int> possible;
     int ret = 0;
@@ -75,7 +75,7 @@ int find_non_toxic(std::vector<Meal> &meals, std::vector<std::string> &allergens
         }
     }
 
-    // work out which ingredient has which allergen, posible part 2 solution
+    // work out which ingredient has which allergen
     bool progress = true;
     while(progress) {
         progress = false;
@@ -91,6 +91,21 @@ int find_non_toxic(std::vector<Meal> &meals, std::vector<std::string> &allergens
         }
     }
 
+    std::map<std::string,std::string> allergen_map;
+    for(auto &p : possible) {
+        int field = 0;
+        while(p.second > 1) {
+            field++;
+            p.second >>= 1;
+        }
+        allergen_map[allergens[field]] = p.first;
+    }
+    std::string sep = "";
+    for(auto &p : allergen_map) {
+        all += sep + p.second;
+        sep = ",";
+    }
+
     return ret;
 }
 
@@ -101,12 +116,13 @@ int main(int argc, char *argv[]) {
     std::vector<Meal> meals;
     std::vector<std::string> allergens;
 
-
     while(std::getline(input, line)) {
         meals.emplace_back(line, allergens);
     }
 
-    std::cout << "Part1: " << find_non_toxic(meals, allergens) << "\n";
+    std::string all = "";
+    std::cout << "Part1: " << find_non_toxic(meals, allergens, all) << "\n";
+    std::cout << "Part2: " << all << "\n";
 
     return 0;
 }
