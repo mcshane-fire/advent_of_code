@@ -47,6 +47,6 @@ int main(int argc, char *argv[]) {
     Sequence seq(line);
 
     std::cout << "Part1: " << iterate(seq, 2020) << "\n";
-
+    std::cout << "Part2: " << iterate(seq, 30000000) << "\n";
     return 0;
 }

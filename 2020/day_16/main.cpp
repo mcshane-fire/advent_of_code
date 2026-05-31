@@ -19,9 +19,10 @@ struct Constraint {
     }
 };
 
-int count_invalid(std::vector<Constraint> &constraints, std::vector<std::vector<int>> &tickets) {
+int count_invalid(std::vector<Constraint> &constraints, std::vector<std::vector<int>> &tickets, std::vector<std::vector<int>> &valid_tickets) {
     int ret = 0;
     for(auto it = std::next(tickets.begin()); it != tickets.end(); it++) {
+        bool valid = true;
         for(int n : *it) {
             bool met = false;
             auto cit = constraints.begin();
@@ -31,7 +32,63 @@ int count_invalid(std::vector<Constraint> &constraints, std::vector<std::vector<
             }
             if(!met) {
                 ret += n;
+                valid = false;
             }
+        }
+        if(valid) {
+            valid_tickets.push_back(*it);
+        }
+    }
+
+    return ret;
+}
+
+int bitcount(int n) {
+    int count = 0;
+    while(n) {
+        n &= n-1;
+        count++;
+    }
+    return count;
+}
+
+int64_t assign_fields(std::vector<Constraint> &constraints, std::vector<std::vector<int>> &tickets, std::vector<int> &my_ticket) {
+    auto possible = std::vector<int>(constraints.size(), (1<<constraints.size())-1);
+
+    for(auto &t : tickets) {
+        for(int i=0; i<t.size(); i++) {
+            for(int j=0; j<constraints.size(); j++) {
+                if(!constraints[j].in(t[i])) {
+                    possible[j] &= ~(1<<i);
+                }
+            }
+        }
+    }
+
+    bool progress = true;
+    while(progress) {
+        progress = false;
+        for(int i=0; i<possible.size(); i++) {
+            if(bitcount(possible[i]) == 1) {
+                for(int j=0; j<possible.size(); j++) {
+                    if(i != j && (possible[i] & possible[j]) != 0) {
+                        progress = true;
+                        possible[j] &= ~possible[i];
+                    }
+                }
+            }
+        }
+    }
+
+    int64_t ret = 1;
+    for(int i=0; i<constraints.size(); i++) {
+        if(constraints[i].field.substr(0,9) == "departure") {
+            int field = 0;
+            while(possible[i] != 1) {
+                field++;
+                possible[i] >>= 1;
+            }
+            ret *= my_ticket[field];
         }
     }
 
@@ -39,10 +96,10 @@ int count_invalid(std::vector<Constraint> &constraints, std::vector<std::vector<
 }
 
 int main(int argc, char *argv[]) {
-    std::string filename = argc >= 2 ? argv[1] : "test_input.txt";
+    std::string filename = argc >= 2 ? argv[1] : "test_input2.txt";
     std::ifstream input(filename);
     std::string line;
-    std::regex cpat = std::regex("([a-z]+): (\\d+)-(\\d+) or (\\d+)-(\\d+)");
+    std::regex cpat = std::regex("([a-z ]+): (\\d+)-(\\d+) or (\\d+)-(\\d+)");
     std::smatch res;
     std::vector<Constraint> constraints;
     std::vector<std::vector<int>> tickets;
@@ -60,7 +117,10 @@ int main(int argc, char *argv[]) {
         }
     }
 
-    std::cout << "Part1: " << count_invalid(constraints, tickets) << "\n";
+    std::vector<std::vector<int>> valid_tickets;
+
+    std::cout << "Part1: " << count_invalid(constraints, tickets, valid_tickets) << "\n";
+    std::cout << "Part2: " << assign_fields(constraints, valid_tickets, tickets[0]) << "\n";
 
     return 0;
 }
