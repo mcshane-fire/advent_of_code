@@ -2,40 +2,58 @@
 #include <fstream>
 #include <iostream>
 #include <vector>
-#include <algorithm>
-#include <iterator>
 
-int moves(std::vector<int> ring, int num) {
-    int min_label = *std::min_element(ring.begin(), ring.end());
-    int max_label = *std::max_element(ring.begin(), ring.end());
+struct Node {
+    int64_t val = 0;
+    struct Node *prev = NULL;
+    struct Node *next = NULL;
+};
+
+int64_t moves(std::vector<int> ring, int num) {
+    int min_label = 1;
+    int max_label = ring.size();    
+    auto nodes = std::vector<Node>(max_label);
+    auto pos = std::vector<int>(max_label);
+    for(int i=0; i<ring.size(); i++) {
+        pos[ring[i]] = i;
+        nodes[i].val = ring[i];
+        nodes[i].next = &(nodes[i == max_label-1 ? 0 : i+1]);
+        nodes[i].prev = &(nodes[i == 0 ? max_label-1 : i-1]);
+    }
+
+    Node *cur = &nodes[0];
     for(int i=0; i<num; i++) {
-        std::vector<int> next(ring.size());
-        int dest = ring[0] == min_label ? max_label : ring[0]-1;
-        auto it = std::find(ring.begin(), ring.end(), dest);
-        while(std::distance(ring.begin(), it) < 4) {
+        Node *start = cur->next;
+        Node *end = start->next->next;
+        int dest = cur->val == min_label ? max_label : cur->val - 1;
+
+        while(dest == start->val || dest == start->next->val || dest == end->val) {
             dest = dest == min_label ? max_label : dest-1;
-            it = std::find(ring.begin(), ring.end(), dest);
         }
-       
-        auto dit = std::copy(std::next(ring.begin(), 4), std::next(it), next.begin());
-        dit = std::copy(std::next(ring.begin()), std::next(ring.begin(),4), dit);
-        dit = std::copy(std::next(it), ring.end(), dit);
-        *dit = ring[0];
-        std::copy(next.begin(), next.end(), ring.begin());
+
+        Node *gap = &nodes[pos[dest]];
+        
+        cur->next = end->next;
+        end->next->prev = cur;
+
+        start->prev = gap;
+        end->next = gap->next;
+        gap->next->prev = end;
+        gap->next = start;
+
+        cur = cur->next;
     }
 
-    auto it = std::find(ring.begin(), ring.end(), 1);
-    int ret = 0;
-    while(true) {
-        it++;
-        if(it == ring.end()) {
-            it = ring.begin();
+    int64_t ret = 0;
+    cur = &nodes[pos[1]];
+    if(max_label < 10) {
+        for(int i=0; i<max_label-1; i++) {
+            cur = cur->next;
+            ret = (ret * 10) + cur->val;
         }
-        if(*it == 1) {
-            break;
-        }
-        ret = (ret * 10) + *it;
-    }
+    } else {    
+        ret = cur->next->val * cur->next->next->val;
+    }    
 
     return ret;
 }
@@ -52,6 +70,13 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << moves(ring, 100) << "\n";
+
+    int max_label = *std::max_element(ring.begin(), ring.end());
+    while(ring.size() < 1000000) {
+        ring.push_back(++max_label);
+    }
+
+    std::cout << "Part2: " << moves(ring, 10000000) << "\n";
 
     return 0;
 }

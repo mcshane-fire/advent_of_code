@@ -14,7 +14,6 @@ int score_hand(std::vector<int> &hand) {
 }
 
 std::pair<int,bool> play_game(std::vector<int> player1, std::vector<int> player2, bool recursive = false) {
-
     std::set<std::pair<std::vector<int>,std::vector<int>>> history;
     while(true) {
         int p1 = player1[0];
@@ -35,7 +34,6 @@ std::pair<int,bool> play_game(std::vector<int> player1, std::vector<int> player2
             std::vector<int> np2;
             np1.insert(np1.begin(), player1.begin(), player1.begin()+p1);
             np2.insert(np2.begin(), player2.begin(), player2.begin()+p2);
-
             player1_win = play_game(np1, np2, true).second;
         }
 
