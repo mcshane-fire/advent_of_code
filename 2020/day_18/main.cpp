@@ -1,17 +1,19 @@
 #include <string>
 #include <fstream>
 #include <iostream>
+#include <format>
 
-int64_t compute(std::string line, int &read) {
+int64_t compute(std::string line, int &read, bool add_first = false) {
     int64_t total = 0;
     bool mul = false;
     read = 0;
+    std::string partial = "";
 
     while(true) {
         int64_t next;
         if(line[0] == '(') {
             int skip;
-            next = compute(line.substr(1), skip);
+            next = compute(line.substr(1), skip, add_first);
             line = line.substr(1+skip);
             read += 1+skip;
         } else {
@@ -21,7 +23,12 @@ int64_t compute(std::string line, int &read) {
             read += pos;
         }
         if(mul) {
-            total *= next;
+            if(add_first) {
+                partial += std::format("{:d} * ", total);
+                total = next;
+            } else {
+                total *= next;
+            }
         } else {
             total += next;
         }
@@ -43,6 +50,12 @@ int64_t compute(std::string line, int &read) {
         line = line.substr(3);
     }
 
+    if(add_first) {
+        int r;
+        partial += std::format("{:d}", total);
+        total = compute(partial, r);
+    }
+
     return total;
 }
 
@@ -51,13 +64,16 @@ int main(int argc, char *argv[]) {
     std::ifstream input(filename);
     std::string line;
 
-    int64_t total = 0;
+    int64_t part1_total = 0;
+    int64_t part2_total = 0;
     while(std::getline(input, line)) {
         int read;
-        total += compute(line, read);
+        part1_total += compute(line, read);
+        part2_total += compute(line, read, true);
     }
 
-    std::cout << "Part1: " << total << "\n";
+    std::cout << "Part1: " << part1_total << "\n";
+    std::cout << "Part2: " << part2_total << "\n";
 
     return 0;
 }
