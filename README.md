@@ -10,3 +10,12 @@ My solutions for some Advent of Code problems, uploaded for my own use - feedbac
 
 ## 2023
 2026-01-15 to 2026-02-09, writing more C++, seeing fewer compile errors.
+
+## 2022
+2026-02-21 to 2026-03-22, day 19 was the most approximate and somehow least satisfying
+
+## 2021
+2026-04-05 to 2026-04-26, first couple of days using bash, day 19 was the most satisfying
+
+## 2020
+2026-05-02 to 2026-06-05, first half done in around 3 separate days, the rest done on two long haul flights.
