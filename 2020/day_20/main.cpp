@@ -4,11 +4,29 @@
 #include <vector>
 #include <map>
 #include <set>
+#include <numeric>
 
 int reverse(int num, int width) {
     int ret = 0;
     for(int i=0; i<width; i++) {
         ret |= (1 & (num >> i)) << (width-i-1);
+    }
+    return ret;
+}
+
+int bitselect(std::vector<int> vec, int pos) {
+    int ret = 0;
+    for(int i=0; i<vec.size(); i++) {
+        ret |= ((vec[i] >> pos) & 1) << i;
+    }
+    return ret;
+}
+
+int bitcount(int num) {
+    int ret = 0;
+    while(num) {
+        ret++;
+        num &= num-1;
     }
     return ret;
 }
@@ -25,6 +43,8 @@ struct Tile {
     int lines;
     int border[4][8];
     int orientation;
+    std::vector<int> middle[8];
+    int bits;
 
     Tile() : lines(0), num(0LL), orientation(-1) {}
 
@@ -48,6 +68,15 @@ struct Tile {
         border[RIGHT][0] |= (line[line.length()-1] == '#' ? 1 : 0) << lines;
         lines++;
 
+        if(lines > 1 && lines < line.length()) {
+            int m = 0;
+            for(int i=1; i<line.length()-1; i++) {
+                m |= (line[i] == '#' ? 1 : 0) << (i-1);
+            }
+            middle[0].push_back(m);
+            bits += bitcount(m);
+        }
+
         if(lines == line.length()) {
             border[BOTTOM][0] = 0;
             for(int i=0; i<line.length(); i++) {
@@ -59,6 +88,9 @@ struct Tile {
             border[LEFT][1] = border[RIGHT][0];
             border[TOP][1] = reverse(border[TOP][0], lines);
             border[BOTTOM][1] = reverse(border[BOTTOM][0], lines);
+            for(int m : middle[0]) {
+                middle[1].push_back(reverse(m, lines-2));
+            }
 
             // vflip 0-1 into 2-3
             for(int i=0; i<2; i++) {
@@ -66,6 +98,9 @@ struct Tile {
                 border[BOTTOM][i+2] = border[TOP][i];
                 border[LEFT][i+2] = reverse(border[LEFT][i], lines);
                 border[RIGHT][i+2] = reverse(border[RIGHT][i], lines);
+                for(auto it = middle[i].rbegin(); it != middle[i].rend(); it++) {
+                    middle[i+2].push_back(*it);
+                }
             }
 
             // transpose 0-3 into 4-7
@@ -74,6 +109,9 @@ struct Tile {
                 border[LEFT][i+4] = border[TOP][i];
                 border[BOTTOM][i+4] = border[RIGHT][i];
                 border[RIGHT][i+4] = border[BOTTOM][i];
+                for(int j=0; j<lines-2; j++) {
+                    middle[i+4].push_back(bitselect(middle[i], j));
+                }
             }
         }
     }
@@ -160,7 +198,7 @@ void try_layout(std::vector<Tile> &tiles, std::map<Pos,Tile> &map) {
     }
 }
 
-int64_t find_layout(std::vector<Tile> &tiles) {
+int64_t find_layout(std::vector<Tile> tiles) {
     // assume we can start from any tile
     std::map<Pos,Tile> map;
     tiles[0].orientation = 0;
@@ -181,6 +219,78 @@ int64_t find_layout(std::vector<Tile> &tiles) {
     return 0;
 }
 
+bool match(std::map<Pos,Tile> &map, int xt, int x, int yt, int y, int num) {
+    auto p = Pos(xt, yt);
+    int got = map[p].lines-2-x;
+    int val = map[p].middle[map[p].orientation][y] >> x;
+    while(got < 20) {
+        p = p + Pos(1,0);
+        val |= map[p].middle[map[p].orientation][y] << got;
+        got += map[p].lines-2;
+    }
+
+    return (val & num) == num;
+}
+
+int spot_sea_monsters(std::map<Pos,Tile> &map) {
+    //          |        #    
+    //#    ##   | ##    ###  
+    // #  #  #  |#  #  #    
+    //0123456789|0123456789
+
+    auto it = map.begin();
+    auto eit = map.rbegin();
+    Pos c0 = (*it).first;
+    Pos c2 = (*eit).first;
+    int lines = (*it).second.lines-2;
+    int found = 0;
+
+    for(int x=0; x<(c2.x - c0.x + 1) * lines - 19; x++) {
+        for(int y=0; y<(c2.y - c0.y + 1) * lines - 2; y++) {
+            if(match(map, c0.x + (x / lines), x % lines, c0.y + (y / lines), y % lines, 262144) &&
+               match(map, c0.x + (x / lines), x % lines, c0.y + ((y+1) / lines), (y+1) % lines, 923745) &&
+               match(map, c0.x + (x / lines), x % lines, c0.y + ((y+2) / lines), (y+2) % lines, 74898)) {
+                found++;
+            }
+        }
+    }
+
+    if(false && found > 0) {
+        for(Pos p = c0; p.y <= c2.y; p = p + Pos(0,1)) {
+            for(int iy = 0; iy < lines; iy++) {
+                for(Pos p2 = p; p2.x <= c2.x; p2 = p2 + Pos(1,0)) {
+                    for(int i=0; i<lines; i++) {
+                        std::cout << (((map[p2].middle[map[p2].orientation][iy] >> i) & 1) == 1 ? "#" : ".");
+                    }
+                }
+                std::cout << "\n";
+            }
+        }
+    }
+
+    return found;
+}
+
+int count_sea_monsters(std::vector<Tile> &tiles) {
+    int ret = 0;
+    for(int i=0; i<8; i++) {
+        for(auto &t : tiles) {
+            t.orientation = -1;
+        }
+
+        std::map<Pos,Tile> map;
+        tiles[0].orientation = i;
+        map[Pos(0,0)] = tiles[0];
+
+        try_layout(tiles, map);
+        if(map.size() == tiles.size()) {
+            ret = std::max(ret, spot_sea_monsters(map));
+        }
+    }
+
+    return std::accumulate(tiles.begin(), tiles.end(), 0, [](int s, const Tile &t) { return s + t.bits; }) - (ret * 15);
+}
+
 int main(int argc, char *argv[]) {
     std::string filename = argc >= 2 ? argv[1] : "test_input.txt";
     std::ifstream input(filename);
@@ -196,6 +306,7 @@ int main(int argc, char *argv[]) {
     }
 
     std::cout << "Part1: " << find_layout(tiles) << "\n";
+    std::cout << "Part1: " << count_sea_monsters(tiles) << "\n";
 
     return 0;
 }
